@@ -5,4 +5,5 @@ If a price is below target price, a notification is sent to the ntfy channel. Th
 
 # TODO
 - Decouple internal list of dictionaries of products to external YAML config or similar
+- Implement polling interval as YAML argument
 - Implement argparse with arguments for the YAML config file, SQLite database file, and ntfy channel
