@@ -24,12 +24,6 @@ products = [
 
     {
         "name": "Samsung Galaxy S24 128GB",
-        "url": "https://www.samsung.com/us/smartphones/galaxy-s24/buy/galaxy-s24-128gb-unlocked-sm-s921ulbaxaa/",
-        "target_price": 400,
-    },
-
-    {
-        "name": "Samsung Galaxy S24 128GB",
         "url": "https://www.bestbuy.com/site/samsung-galaxy-s24-128gb-unlocked-onyx-black/6569840.p?skuId=6569840",
         "target_price": 400,
     },
@@ -37,6 +31,12 @@ products = [
     {
         "name": "Samsung Galaxy S24 128GB",
         "url": "https://www.walmart.com/ip/SAMSUNG-Galaxy-S24-Cell-Phone-128GB-AI-Smartphone-Unlocked-Android-50MP-Camera-Fastest-Processor-Long-Battery-Life-US-Version-2024-Onyx-Black/5400713211?classType=REGULAR&from=/search",
+        "target_price": 400,
+    },
+
+    {
+        "name": "Samsung Galaxy S24 128GB",
+        "url": "https://www.samsung.com/us/smartphones/galaxy-s24/buy/galaxy-s24-128gb-unlocked-sm-s921ulbaxaa/",
         "target_price": 400,
     },
 
@@ -126,8 +126,6 @@ def add_pricelog_record(cursor: sqlite3.Cursor, product_name: str, store: str, u
         status,
         info,
     ))
-
-    return cursor.rowcount > 0
 
 
 def click_samsung_no_trade_in_button(driver: WebDriver):
@@ -221,7 +219,10 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
                 price = price_element.get_attribute("textContent")
 
             if price:
-                price = price.replace("$", "").strip()
+                price = price.lower().strip()
+                price = price.replace("$", "")
+                price = price.replace("now", "") # remove Now prefix from Walmart element that sometimes exists
+                price = price.strip()
                 if price:
                     price = float(price)
             
@@ -340,7 +341,7 @@ def notify_when_below_target(cursor: sqlite3.Cursor, results: typing.List['dict'
 def main():
     while True:
         try:
-            with sqlite3.connect("price_scraper.db") as conn:
+            with sqlite3.connect("price_scraper.db", isolation_level=None) as conn:
                 cursor = conn.cursor()
 
                 create_tables(cursor)
