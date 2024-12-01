@@ -1,3 +1,5 @@
+# TODO: implement Walmart robot or human solver
+
 from pprint import pprint
 import requests
 import sqlite3
@@ -137,11 +139,11 @@ def click_samsung_no_trade_in_button(driver: WebDriver):
         ActionChains(driver).scroll_to_element(no_trade_in_button_elem).perform()
 
         no_trade_in_button_elem.click()
-        print("Clicked no trade in button")
+        print("Clicked Samsung no trade in button")
         time.sleep(2)
     except:
         traceback.print_exc()
-        print("No trade in button selection")
+        print("No Samsung trade in button selection")
 
 
 def get_price(driver: WebDriver, product_dict: dict) -> dict:
@@ -177,6 +179,8 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
         error = True
         info = f"website not supported: {product_dict['url']}"
         print(info)
+
+    print(f"Scraping store {store} - product {product_dict["name"]}...")
 
     # navigate to URL
     if not error:
@@ -225,10 +229,12 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
                 price = price.strip()
                 if price:
                     price = float(price)
+                    print(f"Found price: {price}")
             
             if not price:
                 error = True
                 info = "price not found"
+                print(info)
         except:
             error = True
             info = "exception"
@@ -246,7 +252,7 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
 
 
 def record_and_output_results(cursor: sqlite3.Cursor, results: typing.List['dict']):
-    print("Current prices")
+    print("Current prices:")
     for result_dict in results:
         print(f"[{result_dict['store']}] {result_dict['name']}: {result_dict['current_price']}")
 
@@ -378,11 +384,17 @@ def main():
                 try:
                     results = []
                     for product_dict in products:
+                        # add additional wait time for Walmart
+                        if "walmart.com" in product_dict["url"]:
+                            print("Current product is at Walmart. Waiting an additional 60 seconds before loading page...")
+                            time.sleep(62)
+                        
                         result = get_price(driver, product_dict)
                         if result:
                             results.append(result)
 
-                        time.sleep(32)
+                        print("Waiting 60 seconds...")
+                        time.sleep(62)
                 except:
                     traceback.print_exc()
                 finally:
