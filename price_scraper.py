@@ -1,14 +1,18 @@
+# pip install amazoncaptcha requests selenium stealthenium
+
 # TODO: implement Walmart robot or human solver
 
 from pprint import pprint
-import requests
 import sqlite3
 import time
 import traceback
 import typing
 
+from amazoncaptcha import AmazonCaptcha
+import requests
 from selenium import webdriver
 from selenium.webdriver import ActionChains
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -180,7 +184,7 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
         info = f"website not supported: {product_dict['url']}"
         print(info)
 
-    print(f"Scraping store {store} - product {product_dict["name"]}...")
+    print(f"Scraping store {store} - product {product_dict['name']}...")
 
     # navigate to URL
     if not error:
@@ -194,6 +198,19 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
 
     # scrape price
     if not error:
+        if "amazon.com" in product_dict["url"]:
+            captcha_required = False
+            try:
+                captcha_required = WebDriverWait(driver, 10).until(amazon_captcha_required)
+            except:
+                traceback.print_exc()
+
+            if captcha_required:
+                print("Amazon CAPTCHA required")
+                solve_amazon_captcha(driver)
+            else:
+                print("No Amazon CAPTCHA required")
+
         # need to click the no trade in button on samsung.com for phones
         if "samsung.com" in product_dict["url"]:
             click_samsung_no_trade_in_button(driver)
@@ -342,6 +359,47 @@ def notify_when_below_target(cursor: sqlite3.Cursor, results: typing.List['dict'
             response = requests.post("https://ntfy.sh/dkornacki_price_tracker", data=message)
             if response.status_code == 200:
                 print("Successfully sent ntfy notificaiton")
+
+
+def amazon_captcha_required(driver: WebDriver):
+    # https://www.amazon.com/errors/validateCaptcha
+
+    if "/validatecaptcha" in driver.current_url.lower():
+        return True
+
+    CAPTCHA_TEXT_TO_SEARCH = "type the characters you see in this image"
+
+    headers = driver.find_elements(By.XPATH, "//h1 | //h2 | //h3 | //h4 | //h5 | //h6")
+    found = any(CAPTCHA_TEXT_TO_SEARCH in header.text.lower() for header in headers)
+    if not found:
+        found = any(CAPTCHA_TEXT_TO_SEARCH in header.get_attribute("textContent").lower() for header in headers)
+
+    return found
+
+
+def solve_amazon_captcha(driver: WebDriver):
+    #driver.get("https://www.amazon.com/errors/validateCaptcha")
+
+    img_elem = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, ".a-box img"))
+    )
+    img_src = img_elem.get_attribute("src")
+
+    print("Solving...")
+    captcha = AmazonCaptcha.fromlink(img_src)
+    solution = captcha.solve()
+
+    if solution and solution.lower() != 'not solved':
+        print(f"Captcha solved: {solution}")
+        time.sleep(5)
+        input_elem = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "input#captchacharacters"))
+        )
+        input_elem.send_keys(solution)
+        time.sleep(1)
+        input_elem.send_keys(Keys.ENTER)
+    else:
+        raise Exception("Could not solve CAPTCHA")
 
 
 def main():
