@@ -8,3 +8,4 @@ If a price is below target price, a notification is sent to the ntfy channel. Th
 - Implement polling interval as YAML argument
 - Implement argparse with arguments for the YAML config file, SQLite database file, and ntfy channel
 - Implement matplotlib graphs showing price history over time
+- After testing locally, bring my Walmart CAPTCHA images into source
