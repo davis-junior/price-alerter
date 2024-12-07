@@ -1,8 +1,17 @@
-# pip install amazoncaptcha requests selenium stealthenium
+# pip install amazoncaptcha requests selenium stealthenium opencv-python numpy
 
-# TODO: implement Walmart robot or human solver
+# no longer needed: tls-client pytz
 
+import cv2
+from datetime import datetime
+from io import BytesIO
+import numpy as np
+import pathlib
+from PIL import Image
 from pprint import pprint
+import os
+import random
+import subprocess
 import sqlite3
 import time
 import traceback
@@ -15,6 +24,7 @@ from selenium.webdriver import ActionChains
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from stealthenium import stealth
@@ -73,7 +83,7 @@ products = [
     },
 
 
-    # Home products
+    # # Home products
     {
         "name": 'Hugger 56 in. LED Espresso Bronze Ceiling Fan',
         "url": "https://www.homedepot.com/p/Hugger-56-in-LED-Espresso-Bronze-Ceiling-Fan-AL383D-EB/304542818",
@@ -189,6 +199,7 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
     # navigate to URL
     if not error:
         try:
+            driver.maximize_window()
             driver.get(product_dict["url"])
             time.sleep(2)
         except:
@@ -210,6 +221,19 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
                 solve_amazon_captcha(driver)
             else:
                 print("No Amazon CAPTCHA required")
+
+        if "walmart.com" in product_dict["url"]:
+            captcha_required = False
+            try:
+                captcha_required = WebDriverWait(driver, 10).until(walmart_captcha_required)
+            except:
+                traceback.print_exc()
+
+            if captcha_required:
+                print("Walmart CAPTCHA required")
+                solve_walmart_captcha(driver)
+            else:
+                print("No Walmart CAPTCHA required")
 
         # need to click the no trade in button on samsung.com for phones
         if "samsung.com" in product_dict["url"]:
@@ -316,16 +340,18 @@ def should_send_target_live_notification(cursor: sqlite3.Cursor, product_name: s
 
 
 def should_send_error_notification(cursor: sqlite3.Cursor, product_name: str, store: str):
-    # return 1 if there are at least 2 error records of the product and store that have
-    # been recorded in the 8 hours
+    # this function should only be called if there is a current error condition on the product
+
+    # return 1 if there has been at least 1 successful price record of the product in
+    # the last 24 hours
     sql = """
     --begin-sql
         SELECT 1
         FROM pricelog
         WHERE product_name = ?
             AND store = ?
-            AND status = 'ERROR'
-            AND timestamp_added BETWEEN datetime(current_timestamp, '-8 hours', 'localtime') AND datetime(current_timestamp, 'localtime')
+            AND status != 'ERROR'
+            AND timestamp_added BETWEEN datetime(current_timestamp, '-24 hours', 'localtime') AND datetime(current_timestamp, 'localtime')
         GROUP BY product_name
         HAVING count(*) > 1
         LIMIT 1
@@ -378,6 +404,7 @@ def amazon_captcha_required(driver: WebDriver):
 
 
 def solve_amazon_captcha(driver: WebDriver):
+    #driver.maximize_window()
     #driver.get("https://www.amazon.com/errors/validateCaptcha")
 
     img_elem = WebDriverWait(driver, 10).until(
@@ -402,7 +429,505 @@ def solve_amazon_captcha(driver: WebDriver):
         raise Exception("Could not solve CAPTCHA")
 
 
+def get_walmart_captcha_status(image):
+    internal_status = get_walmart_captcha_internal_status(image)
+    print(internal_status)
+
+    if internal_status == "OPEN_RECTANGLE":
+        return "NOT_STARTED"
+    elif internal_status == "RECTANGLE_FILLED_WAITING":
+        return "COMPLETE"
+    elif internal_status == "RECTANGLE_FILLED_FULL_CHECKMARK":
+        return "COMPLETE"
+    elif internal_status == "RECTANGLE_FILLED_HALF_CHECKMARK":
+        return "COMPLETE"
+    elif internal_status == "RECTANGLE_PARTIALLY_FILLED":
+        return "IN_PROGRESS"
+    elif internal_status == "UNKNOWN_RECTANGLE":
+        return "NOT_STARTED"
+    elif internal_status == "UNKNOWN":
+        return "UNKNOWN"
+
+    return "UNKNOWN"
+
+
+open_rectangle_image = cv2.imread(r"\\server2\General\Archive\Scripts\walmart_captcha_images\open_rectangle.png")
+rectangle_filled_waiting_image = cv2.imread(r"\\server2\General\Archive\Scripts\walmart_captcha_images\rectangle_filled_waiting.png")
+rectangle_filled_full_checkmark_image = cv2.imread(r"\\server2\General\Archive\Scripts\walmart_captcha_images\rectangle_filled_full_checkmark.png")
+filled_rectangle_half_checkmark_image = cv2.imread(r"\\server2\General\Archive\Scripts\walmart_captcha_images\filled_rectangle_half_checkmark.png")
+
+
+def get_walmart_captcha_internal_status(image):
+    if image is None:
+        return "UNKNOWN"
+
+    black_to_white_ratio = get_black_to_white_ratio(image)
+    print(f"black_to_white_ratio: {black_to_white_ratio}")
+
+    open_rectangle_matches = compare_images(image, open_rectangle_image)
+    if open_rectangle_matches >= 70 and black_to_white_ratio <= 0.333:
+        return "OPEN_RECTANGLE"
+    
+    rectangle_filled_waiting_matches = compare_images(image, rectangle_filled_waiting_image)
+    if rectangle_filled_waiting_matches >= 15 and black_to_white_ratio >= 5:
+        return "RECTANGLE_FILLED_WAITING"
+
+    rectangle_filled_full_checkmark_matches = compare_images(image, rectangle_filled_full_checkmark_image)
+    if rectangle_filled_full_checkmark_matches >= 15 and black_to_white_ratio >= 5:
+        return "RECTANGLE_FILLED_FULL_CHECKMARK"
+    
+    rectangle_filled_half_checkmark_matches = compare_images(image, filled_rectangle_half_checkmark_image)
+    if rectangle_filled_half_checkmark_matches >= 15 and black_to_white_ratio >= 5:
+        return "RECTANGLE_FILLED_HALF_CHECKMARK"
+
+    if rectangle_filled_waiting_matches >= 15 and black_to_white_ratio >= 0.333:
+        return "RECTANGLE_PARTIALLY_FILLED"
+
+    if (black_to_white_ratio >= 0.333 and (
+            open_rectangle_matches >= 6
+            or rectangle_filled_waiting_matches >= 6
+            or rectangle_filled_full_checkmark_matches >= 6
+            or rectangle_filled_half_checkmark_matches >= 6)):
+        return "RECTANGLE_PARTIALLY_FILLED"
+
+    if open_rectangle_matches >= 6:
+        return "UNKNOWN_RECTANGLE"
+
+    return "UNKNOWN"
+
+
+def get_black_to_white_ratio(image):
+    if image is None:
+        return 0
+
+    # Define thresholds
+    # Black/gray: pixel values from 0 to 200 (adjust threshold as needed)
+    # White: pixel values from 201 to 255
+    black_gray_mask = (image <= 200)
+    white_mask = (image > 200)
+
+    # Count pixels
+    black_gray_count = np.sum(black_gray_mask)
+    white_count = np.sum(white_mask)
+
+    # Calculate the ratio
+    if white_count > 0:  # Avoid division by zero
+        ratio = black_gray_count / white_count
+    else:
+        ratio = float('inf')  # All pixels are black/gray
+    
+    return ratio
+
+
+def walmart_captcha_required(driver: WebDriver):
+    # https://www.walmart.com/blocked
+
+    if "www.walmart.com/blocked" in driver.current_url.lower():
+        return True
+
+    # try:
+    #     element = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.ID,'px-captcha')))
+    #     if element:
+    #         return True
+    # except:
+    #     pass
+
+    result = take_screenshot_and_get_walmart_captcha_cropped_rectangle(driver)
+    cropped_screenshot_image = result["image"]
+    internal_status = get_walmart_captcha_internal_status(cropped_screenshot_image)
+    if internal_status not in ["UNKNOWN", "UNKNOWN_RECTANGLE"]:
+        return True
+    
+    return False
+
+
+def solve_walmart_captcha(driver: WebDriver):
+    #driver.maximize_window()
+    #driver.get("https://www.walmart.com/blocked")
+
+    time.sleep(3)
+    #subprocess.run(['python', r'\\server2\General\Archive\Scripts\external_packages\perimeterx_solution_walmart_branch\solve.py'], cwd=r'\\server2\General\Archive\Scripts\external_packages\perimeterx_solution_walmart_branch')
+    
+    attempts = 0
+    while attempts < 1:
+        try:
+            attempts += 1
+            # element = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.ID,'px-captcha')))
+            # if element:
+            if walmart_captcha_required(driver):
+                print("Walmart CAPTCHA found. Attempting to solve...")
+                solve_walmart_captcha_recursive(driver)
+        except:
+            traceback.print_exc()
+            print("Likely no more Walmart CAPTCHA")
+            break
+
+
+def take_screenshot_and_get_walmart_captcha_cropped_rectangle(driver: WebDriver):
+    screenshot_image_bytes = driver.get_screenshot_as_png() 
+    image_array = np.frombuffer(screenshot_image_bytes, dtype=np.uint8)
+    screenshot_image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+
+    #cv2.imwrite(f"screenshots/screenshot_{datetime.now().isoformat().replace(':', '').replace(' ', '_').replace('.', '_')}.png", screenshot_image)
+    result = get_walmart_captcha_cropped_rectangle_from_screenshot(screenshot_image)
+    #if result["image"] is not None:
+    #    cv2.imwrite(f"screenshots/crop_{datetime.now().isoformat().replace(':', '').replace(' ', '_').replace('.', '_')}.png", result["image"])
+
+    return result
+
+
+def get_walmart_captcha_cropped_rectangle_from_screenshot(screenshot_image):
+    # Convert to grayscale
+    gray = cv2.cvtColor(screenshot_image, cv2.COLOR_BGR2GRAY)
+
+    # Apply Gaussian Blur
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    # Use adaptive thresholding or simple thresholding
+    _, binary = cv2.threshold(blurred, 127, 255, cv2.THRESH_BINARY_INV)
+
+    # Edge detection
+    edges = cv2.Canny(blurred, 50, 150)
+
+    # Find contours
+    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Initialize variables to track the largest rectangle
+    max_area = 0
+    largest_rect = None
+
+    for contour in contours:
+        # Approximate the contour
+        approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True)
+        
+        # Check if the contour has more than 4 corners (indicating a rounded rectangle)
+        if len(approx) > 4:
+            # Get the bounding rectangle of the contour
+            x, y, w, h = cv2.boundingRect(contour)
+            area = w * h
+            
+            aspect_ratio = w / h
+            if 1.777 < aspect_ratio < 2.777:
+
+                # look for a specific area
+                if 18000 < area < 70000:
+                    print(area)
+                    cropped_image = screenshot_image[y:y+h, x:x+w]
+
+                    # make sure the rectangle is close to the one we're looking for
+                    internal_status = get_walmart_captcha_internal_status(cropped_image)
+                    if internal_status not in ["UNKNOWN", "UNKNOWN_RECTANGLE"]:
+                        # Update the largest rectangle if the current one is bigger
+                        if area > max_area:
+                            max_area = area
+                            largest_rect = (x, y, w, h)
+
+    # Crop and display the largest rectangle if found
+    if largest_rect is not None:
+        x, y, w, h = largest_rect
+        cropped_image = screenshot_image[y:y+h, x:x+w]
+        
+        # Show the cropped image
+        print(f"Largest rectangle area: {w * h}")
+        print(f"Largest rectangle aspect ratio: {w / h}")
+        # cv2.imshow("Largest Rectangle", cropped_image)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+
+        screenshot_height, screenshot_width, screenshot_channels = screenshot_image.shape
+        return {
+            "image": cropped_image,
+            "x": x,
+            "y": y,
+            "width": w,
+            "height": h,
+            "screenshot_width": screenshot_width,
+            "screenshot_height": screenshot_height,
+        }
+    else:
+        print("No valid rectangles detected.")
+    
+    return {
+        "image": None,
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+        "screenshot_width": 0,
+        "screenshot_height": 0,
+    }
+
+
+def compare_images(image1, image2):
+    if image1 is None or image2 is None:
+        return 0
+
+    # Load the images
+    # image1 = cv2.imread('image1.jpg')
+    # image2 = cv2.imread('image2.jpg')
+
+    # Convert to grayscale
+    gray1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
+    gray2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+
+    # Detect ORB keypoints and descriptors
+    orb = cv2.ORB_create()
+    keypoints1, descriptors1 = orb.detectAndCompute(gray1, None)
+    keypoints2, descriptors2 = orb.detectAndCompute(gray2, None)
+
+    # Match descriptors using BFMatcher
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    matches = bf.match(descriptors1, descriptors2)
+
+    # Sort matches by distance
+    matches = sorted(matches, key=lambda x: x.distance)
+
+    # Check the number of good matches
+    print(f"Number of matches: {len(matches)}")
+    # if len(matches) > 10:  # Threshold for similarity
+    #     print("Images are similar")
+    #     cv2.imshow(f"{len(matches)} Images are similar - Image 1", image1)
+    #     cv2.imshow(f"{len(matches)} Images are similar - Image 2", image2)
+    # else:
+    #     print("Images are not similar")
+    #     cv2.imshow(f"{len(matches)} Images are not similar - Image 1", image1)
+    #     cv2.imshow(f"{len(matches)} Images are not similar - Image 2", image2)
+
+    # # Wait for a key press and close the windows
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    return len(matches)
+
+
+def solve_walmart_captcha_recursive(driver: WebDriver, retry=20, unknown_status_count=0):
+    driver.maximize_window()
+    driver.switch_to.default_content()
+
+    if retry <= 0:
+        return False
+
+    # element = None
+    # try:
+    #     element = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "#px-captcha")))
+    #     time.sleep(0.5)
+    # except:
+    #     traceback.print_exc()
+    #     print("Did not find CAPTCHA element")
+    #     return
+
+    # if  element:
+
+    # do not click element if not an open rectangle
+    result = take_screenshot_and_get_walmart_captcha_cropped_rectangle(driver)
+    cropped_screenshot_image = result["image"]
+    internal_status = get_walmart_captcha_internal_status(cropped_screenshot_image)
+    if internal_status != "OPEN_RECTANGLE":
+        if internal_status in ["UNKNOWN", "UNKNOWN_RECTANGLE"]:
+            unknown_status_count += 1
+
+            if unknown_status_count >= 5:
+                print("Unknown status 5 times in a row. Likely CAPTCHA solved. Exiting loop...")
+                return
+
+        # randomly click if filled since the wait loop is long sometimes and it seems like they want you to click anyway
+        if random.randint(0, 5) == 3:
+            html_elem = driver.find_element(By.TAG_NAME, 'body')
+
+            print("Randomly clicking filled rectangle...")
+            x = int(result["x"] + result["width"] // 2)
+
+            # subtract half of screenshot width since Selenium bases offsets off center point of in-view element
+            x -= int(result["screenshot_width"] // 2)
+
+            # add some randomness
+            x += random.randint(int(-0.3 * result["width"]), int(0.3 * result["width"]))
+
+            y = int(result["y"] + result["height"] // 2)
+
+            # subtract half of screenshot width since Selenium bases offsets off center point of in-view element
+            y -= int(result["screenshot_height"] // 2)
+
+            # add some randomness
+            y += random.randint(int(-0.3 * result["height"]), int(0.3 * result["height"]))
+
+            print(f"Randomly moving mouse by offset from center of page {x}, {y}...")
+            actions = ActionChains(driver)
+            actions.move_to_element_with_offset(html_elem, x, y)
+            actions.click(None)
+            actions.perform()
+            time.sleep(0.1)
+
+        print("No open rectangle detected. Not going to click element. Waiting 5 seconds then retrying...")
+        time.sleep(5)
+        return solve_walmart_captcha_recursive(driver, retry, unknown_status_count)
+
+
+    print("Clicking and holding element...")
+
+    #ActionChains(driver).click_and_hold(element).perform()
+    html_elem = driver.find_element(By.TAG_NAME, 'body')
+
+    x = int(result["x"] + result["width"] // 2)
+
+    # subtract half of screenshot width since Selenium bases offsets off center point of in-view element
+    x -= int(result["screenshot_width"] // 2)
+
+    # add some randomness
+    x += random.randint(int(-0.3 * result["width"]), int(0.3 * result["width"]))
+
+    y = int(result["y"] + result["height"] // 2)
+
+    # subtract half of screenshot width since Selenium bases offsets off center point of in-view element
+    y -= int(result["screenshot_height"] // 2)
+
+    # add some randomness
+    y += random.randint(int(-0.3 * result["height"]), int(0.3 * result["height"]))
+
+    print(f"Moving mouse by offset from center of page {x}, {y} then clicking...")
+
+    actions = ActionChains(driver)
+    actions.move_to_element_with_offset(html_elem, x, y)
+    actions.click_and_hold(None)
+    actions.perform()
+
+    time.sleep(2)
+
+    start_time = time.time()
+
+    while True:
+        driver.maximize_window()
+        driver.switch_to.default_content()
+
+        if time.time() - start_time > 20:
+            print("Already waited 20 seconds, exiting loop...")
+            print("Releasing button...")
+            ActionChains(driver).release(None).perform()
+            break
+
+        try:
+            # randomly move mouse every so often
+            if random.randint(0, 100) == 50:
+                x = int(result["x"] + result["width"] // 2)
+
+                # subtract half of screenshot width since Selenium bases offsets off center point of in-view element
+                x -= int(result["screenshot_width"] // 2)
+
+                # add some randomness
+                x += random.randint(int(-0.3 * result["width"]), int(0.3 * result["width"]))
+
+                y = int(result["y"] + result["height"] // 2)
+
+                # subtract half of screenshot width since Selenium bases offsets off center point of in-view element
+                y -= int(result["screenshot_height"] // 2)
+
+                # add some randomness
+                y += random.randint(int(-0.3 * result["height"]), int(0.3 * result["height"]))
+
+                print(f"Randomly moving mouse by offset from center of page {x}, {y}...")
+                actions = ActionChains(driver)
+                actions.move_to_element_with_offset(html_elem, x, y)
+                actions.perform()
+                time.sleep(0.1)
+
+            result = take_screenshot_and_get_walmart_captcha_cropped_rectangle(driver)
+            cropped_screenshot_image = result["image"]
+            status = get_walmart_captcha_status(cropped_screenshot_image)
+            print(f"status: {status}")
+
+            if status == "COMPLETE":
+                print("Releasing button...")
+                ActionChains(driver).release(None).perform()
+                print("Waiting 3 seconds...")
+                time.sleep(3)
+                print("Retrying to see if there is a new CAPTCHA")
+                return solve_walmart_captcha_recursive(driver, retry - 1, unknown_status_count)
+            elif status == "NOT_STARTED":
+                print("Not started, so retrying...")
+                return solve_walmart_captcha_recursive(driver, retry - 1, unknown_status_count)
+            elif status == "IN_PROGRESS":
+                print("In progress, so taking no action")
+            elif status == "UNKNOWN":
+                unknown_status_count += 1
+
+                if unknown_status_count >= 5:
+                    print("Unknown status 5 times in a row. Likely CAPTCHA solved. Exiting loop...")
+                    return
+
+                print("Unknown status, so waiting a few seconds then retrying...")
+                time.sleep(3)
+                return solve_walmart_captcha_recursive(driver, retry - 1, unknown_status_count)
+        except:
+            traceback.print_exc()
+
+        time.sleep(0.1)
+
+    time.sleep(1)
+    return solve_walmart_captcha_recursive(driver, retry - 1, unknown_status_count)
+
+
+def get_new_driver() -> WebDriver:
+    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    options = webdriver.ChromeOptions()
+    options.add_argument(f"--user-agent={user_agent}")
+    options.add_argument("start-maximized")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+
+    # headless does not work for BestBuy
+    #options.add_argument("--headless=new")
+
+    # to keep browser open for testing (also comment driver.quit() at end of script)
+    #options.add_experimental_option("detach", True)
+
+    driver = webdriver.Chrome(options=options, service=webdriver.ChromeService(port=4444))
+    driver.command_executor._url = "http://localhost:4444"
+
+    # bypass bot detection (fixed Home Depot scraping)
+    stealth(
+        driver,
+        languages=["en-US", "en"],
+        vendor="Google Inc.",
+        platform="Win32",
+        webgl_vendor="Intel Inc.",
+        renderer="Intel Iris OpenGL Engine",
+        fix_hairline=True,
+    )
+
+    print(f"Driver user agent: {driver.execute_script('return navigator.userAgent')}")
+    return driver
+
+
 def main():
+    # pathlib.Path("screenshots/").mkdir(parents=True, exist_ok=True)
+
+    # image_paths = [
+    #     'screenshot_2024-12-07T101130_153283.png',
+    # #     r"\\server2\General\Archive\Scripts\walmart_captcha_images\open_rectangle.png",
+    # #     r"\\server2\General\Archive\Scripts\walmart_captcha_images\rectangle_filled_waiting.png",
+    # #     r"\\server2\General\Archive\Scripts\walmart_captcha_images\rectangle_filled_full_checkmark.png",
+    # #     r"\\server2\General\Archive\Scripts\walmart_captcha_images\filled_rectangle_half_checkmark.png",
+    # #     # 'screenshot_open_rectangle.png',
+    # #     # 'screenshot_rectangle_partially_filled.png',
+    # #     # 'screenshot_filled_rectangle_half_checkmark.png',
+    # #     # 'screenshot_rectangle_filled_full_checkmark.png',
+    # #     # 'screenshot_rectangle_filled_waiting.png',
+    # ]
+
+    # for image_path in image_paths:
+    #     print(image_path)
+    #     screenshot_image = cv2.imread(image_path)
+    #     #print(get_walmart_captcha_status(screenshot_image))
+
+    #     cropped_screenshot_image = None
+    #     result = get_walmart_captcha_cropped_rectangle_from_screenshot(screenshot_image)
+    #     if result and result["image"] is not None:
+    #        cropped_screenshot_image = result["image"]
+
+    #     print(get_walmart_captcha_status(cropped_screenshot_image))
+       
+    # return
+
     while True:
         try:
             with sqlite3.connect("price_scraper.db", isolation_level=None) as conn:
@@ -410,53 +935,58 @@ def main():
 
                 create_tables(cursor)
 
-                user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-                options = webdriver.ChromeOptions()
-                options.add_argument(f"--user-agent={user_agent}")
-                options.add_argument("start-maximized")
-                options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                options.add_experimental_option('useAutomationExtension', False)
+                
 
-                # headless does not work for BestBuy
-                #options.add_argument("--headless=new")
+                # driver = get_new_driver()
+                # driver.maximize_window()
+                # driver.get("https://www.walmart.com/blocked")
+                # time.sleep(3)
+                # solve_walmart_captcha(driver)
+                # driver.quit()
+                # return
 
-                # to keep browser open for testing (also comment driver.quit() at end of script)
-                #options.add_experimental_option("detach", True)
 
-                driver = webdriver.Chrome(options=options, service=webdriver.ChromeService(port=4444))
-                driver.command_executor._url = "http://localhost:4444"
 
-                # bypass bot detection (fixed Home Depot scraping)
-                stealth(
-                    driver,
-                    languages=["en-US", "en"],
-                    vendor="Google Inc.",
-                    platform="Win32",
-                    webgl_vendor="Intel Inc.",
-                    renderer="Intel Iris OpenGL Engine",
-                    fix_hairline=True,
-                )
+                results = []
+                for product_dict in products:
+                    try:
+                        print("Getting new driver...")
+                        driver = get_new_driver()
 
-                print(f"Driver user agent: {driver.execute_script('return navigator.userAgent')}")
-
-                try:
-                    results = []
-                    for product_dict in products:
                         # add additional wait time for Walmart
-                        if "walmart.com" in product_dict["url"]:
-                            print("Current product is at Walmart. Waiting an additional 60 seconds before loading page...")
-                            time.sleep(62)
+                        # if "walmart.com" in product_dict["url"]:
+                        #     print("Current product is at Walmart. Waiting an additional 60 seconds before loading page...")
+                        #     time.sleep(62)
                         
                         result = get_price(driver, product_dict)
                         if result:
                             results.append(result)
 
-                        print("Waiting 60 seconds...")
-                        time.sleep(62)
-                except:
-                    traceback.print_exc()
-                finally:
-                    driver.quit()
+                        # even if price is retrieved on Walmart now, sometimes the CAPTCHA shows up to 10 seconds after page load
+                        # just check and solve if so
+                        if result["current_price"] != -1:
+                            print("Even though found price, checking Walmart CAPTCHA again...")
+                            if "walmart.com" in product_dict["url"]:
+                                captcha_required = False
+                                try:
+                                    captcha_required = WebDriverWait(driver, 10).until(walmart_captcha_required)
+                                except:
+                                    traceback.print_exc()
+
+                                if captcha_required:
+                                    print("Walmart CAPTCHA required")
+                                    solve_walmart_captcha(driver)
+                                else:
+                                    print("No Walmart CAPTCHA required")
+                    except:
+                        traceback.print_exc()
+                    finally:
+                        time.sleep(2)
+                        print("Quitting driver...")
+                        driver.quit()
+
+                    print("Waiting 60 seconds...")
+                    time.sleep(60)
 
                 record_and_output_results(cursor, results)
                 notify_when_below_target(cursor, results)
