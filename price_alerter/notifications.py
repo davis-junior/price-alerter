@@ -6,7 +6,7 @@ from globals import config_dict
 from db import should_send_error_notification, should_send_target_live_notification
 
 
-def notify_when_below_target(cursor: sqlite3.Cursor, results: list["dict"]):
+def notify_when_below_target_or_error(cursor: sqlite3.Cursor, results: list["dict"]):
     for result_dict in results:
         message = ""
         if not result_dict["error"]:

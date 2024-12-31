@@ -13,7 +13,7 @@ from db import create_tables
 from driver import get_new_driver
 from globals import config_dict
 from graphs import create_graphs
-from notifications import notify_when_below_target
+from notifications import notify_when_below_target_or_error
 from scraping import get_price
 from util import record_and_output_results
 from walmart_captcha import walmart_captcha_required, solve_walmart_captcha
@@ -88,7 +88,7 @@ def main():
                 results = get_all_prices()
 
                 record_and_output_results(cursor, results)
-                notify_when_below_target(cursor, results)
+                notify_when_below_target_or_error(cursor, results)
 
                 graph_filenames = create_graphs(cursor)
                 create_html(graph_filenames)

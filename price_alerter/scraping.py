@@ -45,6 +45,12 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
         # Home Depot splits the price to 2 span elements. 1 has high order amount and other has low order amount.
         # Custom handling of this is done below
         css_selector = ""
+    elif "musiciansfriend.com" in product_dict["url"]:
+        store = "Musician's Friend"
+        css_selector = ".price-display .price-display_markup"
+    elif "guitarcenter.com" in product_dict["url"]:
+        store = "Guitar Center"
+        css_selector = "#PDPRightRailWrapper .sale-price"
     else:
         store = "Unknown"
         css_selector = ""
@@ -140,6 +146,11 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
                 price = price_element.get_attribute("textContent")
 
             if price:
+                if "musiciansfriend.com" in product_dict["url"]:
+                    # first is screen reader price -- second is displayed price
+                    if len(price.split()) > 1:
+                        price = price.split()[1]
+
                 price = price.lower().strip()
                 price = price.replace("$", "")
                 price = price.replace(

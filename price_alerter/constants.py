@@ -50,7 +50,7 @@ PRODUCTS = [
         "url": "https://harttools.com/products/40v-brushless-20-self-propelled-mower",
         "target_price": 300,
     },
-    # # Home products
+    # Home products
     {
         "name": "Hugger 56 in. LED Espresso Bronze Ceiling Fan",
         "url": "https://www.homedepot.com/p/Hugger-56-in-LED-Espresso-Bronze-Ceiling-Fan-AL383D-EB/304542818",
@@ -65,5 +65,36 @@ PRODUCTS = [
         "name": "Trice 52 in. LED Espresso Bronze Ceiling Fan",
         "url": "https://www.homedepot.com/p/Trice-52-in-LED-Espresso-Bronze-Ceiling-Fan-YG269BP-EB/304542645?MERCH=REC-_-brand_based_collection-_-304542817-_-4-_-n/a-_-n/a-_-n/a-_-n/a-_-n/a",
         "target_price": 45,
+    },
+    # Instruments
+    {
+        "name": "Alesis Nitro Max Electric Drum Set",
+        "url": "https://www.amazon.com/Alesis-Electric-Bluetooth-Authentic-Sounds/dp/B0C43R8SRB/",
+        "target_price": 310,
+    },
+    {
+        "name": "Alesis Nitro Pro Electric Drum Set",
+        "url": "https://www.amazon.com/Alesis-Electric-Bluetooth-Authentic-Sounds/dp/B0DB5TMZ9S/",
+        "target_price": 420,
+    },
+    {
+        "name": "Alesis Nitro Max Electric Drum Set",
+        "url": "https://www.musiciansfriend.com/drums-percussion/alesis-nitro-max-8-piece-electronic-drum-set-with-bluetooth-and-bfd-sounds/m06882000001000",
+        "target_price": 310,
+    },
+    {
+        "name": "Alesis Nitro Pro Electric Drum Set",
+        "url": "https://www.musiciansfriend.com/drums-percussion/alesis-nitro-pro-8-piece-pro-electronic-drum-kit-with-mesh-heads-bluetooth/m14632000000000?rNtt=alesis%20nitro%20pro&index=2",
+        "target_price": 420,
+    },
+    {
+        "name": "Alesis Nitro Max Electric Drum Set",
+        "url": "https://www.guitarcenter.com/Alesis/Nitro-MAX-8-Piece-Electronic-Drum-Set-With-Bluetooth-and-BFD-Sounds-Black-1500000413581.gc",
+        "target_price": 310,
+    },
+    {
+        "name": "Alesis Nitro Pro Electric Drum Set",
+        "url": "https://www.guitarcenter.com/Alesis/Nitro-Pro-8-Piece-Pro-Electronic-Drum-Kit-With-Mesh-Heads-Bluetooth-1500000437603.gc",
+        "target_price": 420,
     },
 ]
