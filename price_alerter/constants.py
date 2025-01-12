@@ -84,7 +84,7 @@ PRODUCTS = [
     },
     {
         "name": "Alesis Nitro Pro Electric Drum Set",
-        "url": "https://www.musiciansfriend.com/drums-percussion/alesis-nitro-pro-8-piece-pro-electronic-drum-kit-with-mesh-heads-bluetooth/m14632000000000?rNtt=alesis%20nitro%20pro&index=2",
+        "url": "https://www.musiciansfriend.com/drums-percussion/alesis-nitro-pro-8-piece-pro-electronic-drum-kit-with-mesh-heads-bluetooth/m14632000000000",
         "target_price": 420,
     },
     {
