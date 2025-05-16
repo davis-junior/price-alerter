@@ -225,6 +225,37 @@ def has_been_at_least_one_successful_price_recording_in_last_day(
     return result and len(result) > 0 and result[0] == 1
 
 
+def has_been_at_least_one_successful_price_recording_in_last_week(
+    cursor: sqlite3.Cursor, product_name: str, store: str
+):
+    # return 1 if there has been at least 1 successful price record of the product in
+    # the last week
+    sql = """
+    --begin-sql
+        SELECT 1
+        FROM pricelog
+        WHERE product_name = ?
+            AND store = ?
+            AND status != 'ERROR'
+            AND timestamp_added BETWEEN datetime(current_timestamp, '-7 days', 'localtime') AND datetime(current_timestamp, 'localtime')
+        GROUP BY product_name
+        HAVING count(*) > 0
+        LIMIT 1
+    --end-sql
+    """
+
+    cursor.execute(
+        sql,
+        (
+            product_name,
+            store,
+        ),
+    )
+
+    result = cursor.fetchone()
+    return result and len(result) > 0 and result[0] == 1
+
+
 def have_sent_at_least_one_error_notification_in_last_day(
     cursor: sqlite3.Cursor, product_name: str, store: str
 ):
@@ -256,17 +287,48 @@ def have_sent_at_least_one_error_notification_in_last_day(
     return result and len(result) > 0 and result[0] == 1
 
 
+def have_sent_at_least_one_error_notification_in_last_week(
+    cursor: sqlite3.Cursor, product_name: str, store: str
+):
+    # return 1 if there has been at least 1 error notification sent for the product in
+    # the last week
+    sql = """
+    --begin-sql
+        SELECT 1
+        FROM notifications
+        WHERE product_name = ?
+            AND store = ?
+            AND type = 'ERROR'
+            AND timestamp_sent BETWEEN datetime(current_timestamp, '-7 days', 'localtime') AND datetime(current_timestamp, 'localtime')
+        GROUP BY product_name
+        HAVING count(*) > 0
+        LIMIT 1
+    --end-sql
+    """
+
+    cursor.execute(
+        sql,
+        (
+            product_name,
+            store,
+        ),
+    )
+
+    result = cursor.fetchone()
+    return result and len(result) > 0 and result[0] == 1
+
+
 def should_send_error_notification(
     cursor: sqlite3.Cursor, product_name: str, store: str
 ):
     # this function should only be called if there is a current error condition on the product
 
-    if has_been_at_least_one_successful_price_recording_in_last_day(
+    if has_been_at_least_one_successful_price_recording_in_last_week(
         cursor, product_name, store
     ):
         return False
 
-    if have_sent_at_least_one_error_notification_in_last_day(
+    if have_sent_at_least_one_error_notification_in_last_week(
         cursor, product_name, store
     ):
         return False
