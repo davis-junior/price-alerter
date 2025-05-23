@@ -14,7 +14,8 @@ def click_samsung_no_trade_in_button(driver: WebDriver):
             EC.presence_of_element_located(
                 (
                     By.CSS_SELECTOR,
-                    ".TradeInOption_tradein__wrapper__Bmb3w:has(.TradeInOption_no_tradein__label__D39Ic)",
+                    #".TradeInOption_tradein__wrapper__Bmb3w:has(.TradeInOption_no_tradein__label__D39Ic)",
+                    ".TradeInOption_tradein__option__card__details__cPs6G:has(.TradeInOption_tradein__option__card__label_inBox__EO7WG):not(:has(.TradeInOption_yesTradeIn_withInBox__nAfTL))",
                 )
             )
         )

@@ -25,7 +25,8 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
 
     if "amazon.com" in product_dict["url"]:
         store = "Amazon"
-        css_selector = "#newAccordionRow_0 #corePrice_feature_div span.a-offscreen"
+        #css_selector = "#newAccordionRow_0 #corePrice_feature_div span.a-offscreen"
+        css_selector = "#apex_offerDisplay_desktop #corePrice_feature_div span.a-offscreen"
     elif "bestbuy.com" in product_dict["url"]:
         store = "Best Buy"
         css_selector = ".priceView-layout-large .priceView-customer-price > span[aria-hidden='true']"
@@ -38,7 +39,8 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
     elif "samsung.com" in product_dict["url"]:
         # note: this currently just scrapes the default first tab selected
         store = "Samsung"
-        css_selector = ".DeviceTile_selected__H71O3 .DeviceTile_device__price___rO94"
+        #css_selector = ".DeviceTile_selected__H71O3 .DeviceTile_device__price___rO94"
+        css_selector = ".PriceInfoText_priceInfo__pAyUK:not(:has(.terms)"
     elif "homedepot.com" in product_dict["url"]:
         store = "Home Depot"
 
@@ -50,7 +52,8 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
         css_selector = ".price-display .price-display_markup"
     elif "guitarcenter.com" in product_dict["url"]:
         store = "Guitar Center"
-        css_selector = "#PDPRightRailWrapper .sale-price"
+        #css_selector = "#PDPRightRailWrapper .sale-price"
+        css_selector = ".pdp-price-wrap span"
     else:
         store = "Unknown"
         css_selector = ""

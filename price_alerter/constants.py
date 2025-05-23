@@ -15,6 +15,11 @@ PRODUCTS = [
         "target_price": 400,
     },
     {
+        "name": "Samsung Galaxy S25 256GB Navy",
+        "url": "https://www.amazon.com/Samsung-Smartphone-Processor-ProScaler-Manufacturer/dp/B0DP3FT6YM/ref=sr_1_1?crid=C7AXTT8AWD9S&dib=eyJ2IjoiMSJ9.GKiBLx9CiGgk82aZ4Z4On6dXYy2gCuijQIwsLLw9QzRatTu3dSx2mGmCBhgDmAJBd5fdysyuBQ9NcjhL3aFqspH6KfCEhnK0bIdHy0usVUhOdVn-_4SFygdx5Bpnhcj-6NDlKezMSn8IZxZOtkeCstAj12Yis7Il3Ke0GuOxSFL1mr1Rs8TM5ztVPX1Ed3rAm8c9gNy5Bx5r80wTNVOcHbdgu6M5erJQnrRuytIZFjY.2KA1-IYM-87jZN4vnXbKFk0AbzU70JXSxfGSPf91Sx0&dib_tag=se&keywords=galaxy%2Bs25&qid=1748039043&sprefix=galaxy%2Bs2%2Caps%2C219&sr=8-1&th=1",
+        "target_price": 500,
+    },
+    {
         "name": "Samsung Galaxy S24 128GB",
         "url": "https://www.bestbuy.com/site/samsung-galaxy-s24-128gb-unlocked-onyx-black/6569840.p?skuId=6569840",
         "target_price": 400,
