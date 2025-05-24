@@ -159,6 +159,14 @@ def get_price(driver: WebDriver, product_dict: dict) -> dict:
                 price = price.replace(
                     "now", ""
                 )  # remove Now prefix from Walmart element that sometimes exists
+  
+                # remove extra text from Samsung element
+                price = price.replace("total", "")
+                price = price.replace("sale", "")
+                price = price.replace("price", "")
+                price = price.replace("original", "")
+                price = price.replace("-", "")
+                
                 price = price.strip()
                 if price:
                     price = float(price)
